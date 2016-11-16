@@ -330,7 +330,30 @@ public class Peripheral extends BluetoothGattCallback {
             notificationCallbacks.put(key, callbackContext);
 
             if (gatt.setCharacteristicNotification(characteristic, true)) {
-                success = true;
+
+                // Why doesn't setCharacteristicNotification write the descriptor?
+                BluetoothGattDescriptor descriptor = characteristic.getDescriptor(CLIENT_CHARACTERISTIC_CONFIGURATION_UUID);
+                if (descriptor != null) {
+
+                    // prefer notify over indicate
+                    if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_NOTIFY) != 0) {
+                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                    } else if ((characteristic.getProperties() & BluetoothGattCharacteristic.PROPERTY_INDICATE) != 0) {
+                        descriptor.setValue(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE);
+                    } else {
+                        LOG.w(TAG, "Characteristic " + characteristicUUID + " does not have NOTIFY or INDICATE property set");
+                    }
+
+                    if (gatt.writeDescriptor(descriptor)) {
+                        success = true;
+                    } else {
+                        callbackContext.error("Failed to set client characteristic notification for " + characteristicUUID);
+                    }
+
+                } else {
+                    callbackContext.error("Set notification failed for " + characteristicUUID);
+                }
+
             } else {
                 callbackContext.error("Failed to register notification for " + characteristicUUID);
             }
